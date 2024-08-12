@@ -149,6 +149,7 @@ export default function MovieId({ movie, torrents, downloaded }: Props) {
                       <PlayArrow />
                     </IconButton>
                     <Link
+                      replace
                       href={`/download?movie=${encodeURIComponent(
                         JSON.stringify(movie)
                       )}&torrent=${encodeURIComponent(

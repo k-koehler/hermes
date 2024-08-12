@@ -1,56 +1,8 @@
 import Transmission from "transmission-promise";
 import { join } from "path";
 import fsSync, { promises as fs } from "fs";
-import ffmpeg from "ffmpeg";
-
-interface ManifestEntry {
-  path?: string;
-  error?: string;
-  progress?: {
-    step: "downloading" | "prepare-manifest" | "convert-video";
-    percentage?: number;
-  };
-}
-
-interface ManifestData {
-  [movieId: string]: ManifestEntry;
-}
-
-export class Manifest {
-  private static path = join(process.cwd(), "downloads/manifest.json");
-
-  static get(): ManifestData {
-    if (!fsSync.existsSync(this.path)) {
-      fsSync.writeFileSync(this.path, "{}");
-    }
-    return JSON.parse(fsSync.readFileSync(this.path, "utf-8"));
-  }
-
-  static write(data: ManifestData): void {
-    fsSync.writeFileSync(this.path, JSON.stringify(data, null, 2));
-  }
-
-  static getMovie(movieId: number): ManifestEntry {
-    const manifest = this.get();
-    return manifest[movieId] || {};
-  }
-
-  static setMovie(movieId: number, data: ManifestEntry): void {
-    const manifest = this.get();
-    manifest[movieId] = data;
-    this.write(manifest);
-  }
-
-  static setMovieProgress(
-    movieId: number,
-    step: "prepare-manifest" | "convert-video",
-    percentage?: number
-  ): void {
-    const movie = this.getMovie(movieId);
-    movie.progress = { step, percentage };
-    this.setMovie(movieId, movie);
-  }
-}
+import ffmpeg from "fluent-ffmpeg";
+import Manifest from "./manifest";
 
 export async function downloadMovie(movieId: number, magnet: string) {
   const client = new Transmission();
@@ -144,10 +96,12 @@ export async function getTorrentMovieDownloadPath(
   }
 }
 
-class MovieDownloadPathError extends Error {
-  constructor(message: string) {
+export class MovieDownloadPathError extends Error {
+  public errorType: "NotDownloaded" | "InvalidFormat";
+  constructor(message: string, errorType: "NotDownloaded" | "InvalidFormat") {
     super(message);
     this.name = "MovieDownloadPathError";
+    this.errorType = errorType;
   }
 }
 
@@ -156,15 +110,14 @@ export async function getMovieDownloadPath(movieId: number): Promise<string> {
   if (existingManifest.path) {
     return existingManifest.path;
   }
-  Manifest.setMovieProgress(movieId, "prepare-manifest");
   const downloaded = await checkMovieDownloaded(movieId);
   if (!downloaded) {
-    throw new MovieDownloadPathError("Movie not downloaded");
+    throw new MovieDownloadPathError("Movie not downloaded", "NotDownloaded");
   }
   const path = await getTorrentMovieDownloadPath(movieId);
   const ext = path.split(".").pop();
   if (ext !== "mp4") {
-    throw new MovieDownloadPathError("Invalid video format");
+    throw new MovieDownloadPathError("Invalid video format", "InvalidFormat");
   }
   const newPath = join(process.cwd(), "downloads/movies", `${movieId}.mp4`);
   await fs.rename(path, newPath);
@@ -172,7 +125,7 @@ export async function getMovieDownloadPath(movieId: number): Promise<string> {
   return newPath;
 }
 
-export async function movieIsOk(movieId: number) {
+export async function getMovieOk(movieId: number) {
   try {
     await getMovieDownloadPath(movieId);
     return true;
@@ -182,4 +135,29 @@ export async function movieIsOk(movieId: number) {
     }
     throw e;
   }
+}
+
+export async function convertMovie(movieId: number) {
+  const torrentPath = await getTorrentMovieDownloadPath(movieId);
+  const newPath = torrentPath.replace(/\.\w+$/, ".mp4");
+  return new Promise<void>((resolve, reject) => {
+    ffmpeg(torrentPath)
+      .outputOptions([
+        "-c:v libx264",
+        "-preset ultrafast",
+        "-crf 23",
+        "-c:a aac",
+        "-b:a 128k",
+      ])
+      .output(newPath)
+      .on("end", () => {
+        fs.unlink(torrentPath);
+        resolve();
+      })
+      .on("progress", (progress) => {
+        Manifest.setMovieConversionProgress(movieId, progress.percent || 0);
+      })
+      .on("error", (err) => reject(err))
+      .run();
+  });
 }

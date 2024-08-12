@@ -87,7 +87,7 @@ export default function Download({
 
   useEffect(() => {
     if (done) {
-      router.push(`/movies/${movie.id}`);
+      router.replace(`/movies/${movie.id}`);
     }
   }, [done, movie.id, router]);
 

@@ -3,11 +3,7 @@ import fsSync, { promises as fs } from "fs";
 
 interface ManifestEntry {
   path?: string;
-  error?: string;
-  progress?: {
-    step: "downloading" | "prepare-manifest" | "convert-video";
-    percentage?: number;
-  };
+  conversionProgress?: number;
 }
 
 interface ManifestData {
@@ -42,13 +38,10 @@ export default class Manifest {
     this.write(manifest);
   }
 
-  static setMovieProgress(
-    movieId: number,
-    step: "prepare-manifest" | "convert-video",
-    percentage?: number
-  ): void {
-    const movie = this.getMovie(movieId);
-    movie.progress = { step, percentage };
-    this.setMovie(movieId, movie);
+  static setMovieConversionProgress(movieId: number, progress: number): void {
+    const manifest = this.get();
+    manifest[movieId] ??= {};
+    manifest[movieId].conversionProgress = progress;
+    this.write(manifest);
   }
 }
