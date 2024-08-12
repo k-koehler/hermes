@@ -12,16 +12,14 @@ interface Props {
 
 export async function getServerSideProps() {
   const trendingMovies = await getTrendingMovies();
-  const trendingTvShows = await getTrendingTvShows();
   return {
     props: {
       trendingMovies,
-      trendingTvShows,
     },
   };
 }
 
-export default function Index({ trendingMovies, trendingTvShows }: Props) {
+export default function Index({ trendingMovies }: Props) {
   return (
     <Page
       style={{
@@ -44,11 +42,6 @@ export default function Index({ trendingMovies, trendingTvShows }: Props) {
         ))}
       </MediaContainer>
       <Typography variant="h4">Trending TV Shows</Typography>
-      <MediaContainer>
-        {trendingTvShows.map((tvShow) => (
-          <MediaCard key={tvShow.id} media={tvShowToMedia(tvShow)} />
-        ))}
-      </MediaContainer>
     </Page>
   );
 }

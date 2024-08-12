@@ -1,6 +1,7 @@
 import Transmission from "transmission-promise";
 import { join } from "path";
 import fsSync, { promises as fs } from "fs";
+import ffmpeg from "ffmpeg";
 
 interface ManifestEntry {
   path?: string;
@@ -176,7 +177,7 @@ export async function getMovieDownloadPath(
     const path = await getTorrentMovieDownloadPath(movieId);
     const ext = path.split(".").pop();
     if (ext !== "mp4") {
-      throw new Error("Invalid video format");
+      return { ok: false, error: "Invalid video format" };
     }
     const newPath = join(process.cwd(), "downloads/movies", `${movieId}.mp4`);
     await fs.rename(path, newPath);

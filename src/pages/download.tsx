@@ -121,7 +121,7 @@ export default function Download({
                 </Grid>
               </Grid>
               <Typography variant="body1" gutterBottom>
-                File Size: {torrent.size} GB
+                File Size: {torrent.size}
               </Typography>
               {downloading && progress ? (
                 <div>

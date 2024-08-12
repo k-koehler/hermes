@@ -1,25 +1,22 @@
 import MediaCard from "@/components/media-card";
 import MediaContainer from "@/components/media-container";
 import Page from "@/components/page";
-import { searchMovie, searchTvShow } from "@/server/moviedb";
-import { movieToMedia, tvShowToMedia } from "@/defs";
-import styled from "@emotion/styled";
+import { movieToMedia } from "@/defs";
+import { searchMovie } from "@/server/moviedb";
 import { TextField, Typography } from "@mui/material";
 import type {
-  InferGetServerSidePropsType,
   GetServerSidePropsContext,
+  InferGetServerSidePropsType,
 } from "next";
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const query = context.query.q;
   const movies = await searchMovie(query as string);
-  const tvShows = await searchTvShow(query as string);
-  return { props: { movies, tvShows } };
+  return { props: { movies } };
 }
 
 export default function Search({
   movies,
-  tvShows,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   return (
     <Page>
@@ -38,16 +35,6 @@ export default function Search({
           <MediaContainer>
             {movies.map((movie) => (
               <MediaCard key={movie.id} media={movieToMedia(movie)} />
-            ))}
-          </MediaContainer>
-        </>
-      ) : null}
-      {tvShows.length ? (
-        <>
-          <Typography variant="h4">TV Shows</Typography>
-          <MediaContainer>
-            {tvShows.map((tvShow) => (
-              <MediaCard key={tvShow.id} media={tvShowToMedia(tvShow)} />
             ))}
           </MediaContainer>
         </>

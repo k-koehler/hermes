@@ -1,13 +1,12 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import fs from "fs";
-import path from "path";
 import { getMovieDownloadPath } from "@/server/downloads";
+import fs from "fs";
+import { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { type, id } = req.query;
+  const { id } = req.query;
   const videoPath = await getMovieDownloadPath(Number(id));
   if (!videoPath.ok) {
     return res.status(404).json({ message: "Movie not ready" });
