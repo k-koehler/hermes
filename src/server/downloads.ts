@@ -144,46 +144,42 @@ export async function getTorrentMovieDownloadPath(
   }
 }
 
-export type MovieDownloadPath =
-  | { ok: true; path: string }
-  | {
-      ok: false;
-      error?: string;
-      progress?: {
-        step: "downloading" | "prepare-manifest" | "convert-video";
-        progress?: number;
-      };
-    };
+class MovieDownloadPathError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MovieDownloadPathError";
+  }
+}
 
-export async function getMovieDownloadPath(
-  movieId: number
-): Promise<MovieDownloadPath> {
+export async function getMovieDownloadPath(movieId: number): Promise<string> {
+  const existingManifest = Manifest.getMovie(movieId);
+  if (existingManifest.path) {
+    return existingManifest.path;
+  }
+  Manifest.setMovieProgress(movieId, "prepare-manifest");
+  const downloaded = await checkMovieDownloaded(movieId);
+  if (!downloaded) {
+    throw new MovieDownloadPathError("Movie not downloaded");
+  }
+  const path = await getTorrentMovieDownloadPath(movieId);
+  const ext = path.split(".").pop();
+  if (ext !== "mp4") {
+    throw new MovieDownloadPathError("Invalid video format");
+  }
+  const newPath = join(process.cwd(), "downloads/movies", `${movieId}.mp4`);
+  await fs.rename(path, newPath);
+  Manifest.setMovie(movieId, { path: newPath });
+  return newPath;
+}
+
+export async function movieIsOk(movieId: number) {
   try {
-    const existingManifest = Manifest.getMovie(movieId);
-    if (existingManifest.path) {
-      return { ok: true, path: existingManifest.path };
+    await getMovieDownloadPath(movieId);
+    return true;
+  } catch (e) {
+    if (e instanceof MovieDownloadPathError) {
+      return false;
     }
-    Manifest.setMovieProgress(movieId, "prepare-manifest");
-    const downloaded = await checkMovieDownloaded(movieId);
-    if (!downloaded) {
-      return {
-        ok: false,
-        progress: {
-          step: "downloading",
-          progress: (await movieDownloadProgess(movieId))?.progress ?? 0,
-        },
-      };
-    }
-    const path = await getTorrentMovieDownloadPath(movieId);
-    const ext = path.split(".").pop();
-    if (ext !== "mp4") {
-      return { ok: false, error: "Invalid video format" };
-    }
-    const newPath = join(process.cwd(), "downloads/movies", `${movieId}.mp4`);
-    await fs.rename(path, newPath);
-    Manifest.setMovie(movieId, { path: newPath });
-    return { ok: true, path: newPath };
-  } catch {
-    return { ok: false, error: "Failed to prepare movie" };
+    throw e;
   }
 }
