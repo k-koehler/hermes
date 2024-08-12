@@ -9,10 +9,10 @@ export default async function handler(
 ) {
   const { type, id } = req.query;
   const videoPath = await getMovieDownloadPath(Number(id));
-  if (!videoPath) {
-    return res.status(404).json({ message: "Movie not found" });
+  if (!videoPath.ok) {
+    return res.status(404).json({ message: "Movie not ready" });
   }
-  const stat = fs.statSync(videoPath);
+  const stat = fs.statSync(videoPath.path);
   const fileSize = stat.size;
   const range = req.headers.range;
 
@@ -21,7 +21,7 @@ export default async function handler(
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
     const chunksize = end - start + 1;
-    const file = fs.createReadStream(videoPath, { start, end });
+    const file = fs.createReadStream(videoPath.path, { start, end });
     const head = {
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
       "Accept-Ranges": "bytes",
@@ -37,6 +37,6 @@ export default async function handler(
       "Content-Type": "video/mp4",
     };
     res.writeHead(200, head);
-    fs.createReadStream(videoPath).pipe(res);
+    fs.createReadStream(videoPath.path).pipe(res);
   }
 }

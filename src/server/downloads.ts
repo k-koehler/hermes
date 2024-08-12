@@ -1,6 +1,55 @@
 import Transmission from "transmission-promise";
 import { join } from "path";
-import { promises as fs } from "fs";
+import fsSync, { promises as fs } from "fs";
+
+interface ManifestEntry {
+  path?: string;
+  error?: string;
+  progress?: {
+    step: "downloading" | "prepare-manifest" | "convert-video";
+    percentage?: number;
+  };
+}
+
+interface ManifestData {
+  [movieId: string]: ManifestEntry;
+}
+
+export class Manifest {
+  private static path = join(process.cwd(), "downloads/manifest.json");
+
+  static get(): ManifestData {
+    if (!fsSync.existsSync(this.path)) {
+      fsSync.writeFileSync(this.path, "{}");
+    }
+    return JSON.parse(fsSync.readFileSync(this.path, "utf-8"));
+  }
+
+  static write(data: ManifestData): void {
+    fsSync.writeFileSync(this.path, JSON.stringify(data, null, 2));
+  }
+
+  static getMovie(movieId: number): ManifestEntry {
+    const manifest = this.get();
+    return manifest[movieId] || {};
+  }
+
+  static setMovie(movieId: number, data: ManifestEntry): void {
+    const manifest = this.get();
+    manifest[movieId] = data;
+    this.write(manifest);
+  }
+
+  static setMovieProgress(
+    movieId: number,
+    step: "prepare-manifest" | "convert-video",
+    percentage?: number
+  ): void {
+    const movie = this.getMovie(movieId);
+    movie.progress = { step, percentage };
+    this.setMovie(movieId, movie);
+  }
+}
 
 export async function downloadMovie(movieId: number, magnet: string) {
   const client = new Transmission();
@@ -53,7 +102,9 @@ export async function checkMovieDownloaded(movieId: number) {
   }
 }
 
-export async function getMovieDownloadPath(movieId: number) {
+export async function getTorrentMovieDownloadPath(
+  movieId: number
+): Promise<string> {
   const downloadPath = join(
     process.cwd(),
     "downloads/movies",
@@ -61,51 +112,77 @@ export async function getMovieDownloadPath(movieId: number) {
   );
   const validExtensions = ["mp4", "mkv", "avi"];
 
+  async function findLargestMediaFile(
+    dirPath: string
+  ): Promise<{ path: string; size: number } | null> {
+    const dirFiles = await fs.readdir(dirPath);
+    let largestFile: { path: string; size: number } | null = null;
+
+    for (const file of dirFiles) {
+      const fullPath = join(dirPath, file);
+      const stats = await fs.stat(fullPath);
+
+      if (stats.isDirectory()) {
+        const result = await findLargestMediaFile(fullPath);
+        if (result && (!largestFile || result.size > largestFile.size)) {
+          largestFile = result;
+        }
+      } else if (validExtensions.some((ext) => file.endsWith(`.${ext}`))) {
+        if (!largestFile || stats.size > largestFile.size) {
+          largestFile = { path: fullPath, size: stats.size };
+        }
+      }
+    }
+    return largestFile;
+  }
+  const result = await findLargestMediaFile(downloadPath);
+  if (result) {
+    return result.path;
+  } else {
+    throw new Error("No valid video files found");
+  }
+}
+
+export type MovieDownloadPath =
+  | { ok: true; path: string }
+  | {
+      ok: false;
+      error?: string;
+      progress?: {
+        step: "downloading" | "prepare-manifest" | "convert-video";
+        progress?: number;
+      };
+    };
+
+export async function getMovieDownloadPath(
+  movieId: number
+): Promise<MovieDownloadPath> {
   try {
-    // Read the contents of the directory
-    const dirFiles = await fs.readdir(downloadPath);
-
-    // Find the first folder in the directory
-    const folder = await Promise.all(
-      dirFiles.map(async (file) => {
-        const fullPath = join(downloadPath, file);
-        const stats = await fs.stat(fullPath);
-        return { name: file, isDirectory: stats.isDirectory() };
-      })
-    ).then((files) => files.find((file) => file.isDirectory));
-
-    if (!folder) {
-      throw new Error("No movie folder found");
+    const existingManifest = Manifest.getMovie(movieId);
+    if (existingManifest.path) {
+      return { ok: true, path: existingManifest.path };
     }
-
-    const folderPath = join(downloadPath, folder.name);
-
-    // Read the contents of the folder
-    const files = await fs.readdir(folderPath);
-
-    const fileStats = await Promise.all(
-      files
-        .filter((file) =>
-          validExtensions.some((ext) => file.endsWith(`.${ext}`))
-        )
-        .map(async (file) => {
-          const filePath = join(folderPath, file);
-          const stats = await fs.stat(filePath);
-          return { name: file, path: filePath, size: stats.size };
-        })
-    );
-
-    const largestFile = fileStats.sort((a, b) => b.size - a.size)[0];
-
-    console.log(`Largest file for movie ID ${movieId}:`, largestFile);
-
-    if (largestFile) {
-      return largestFile.path;
-    } else {
-      throw new Error("No valid video files found");
+    Manifest.setMovieProgress(movieId, "prepare-manifest");
+    const downloaded = await checkMovieDownloaded(movieId);
+    if (!downloaded) {
+      return {
+        ok: false,
+        progress: {
+          step: "downloading",
+          progress: (await movieDownloadProgess(movieId))?.progress ?? 0,
+        },
+      };
     }
-  } catch (error) {
-    console.error(`Error finding movie file for ID ${movieId}:`, error);
-    throw error;
+    const path = await getTorrentMovieDownloadPath(movieId);
+    const ext = path.split(".").pop();
+    if (ext !== "mp4") {
+      throw new Error("Invalid video format");
+    }
+    const newPath = join(process.cwd(), "downloads/movies", `${movieId}.mp4`);
+    await fs.rename(path, newPath);
+    Manifest.setMovie(movieId, { path: newPath });
+    return { ok: true, path: newPath };
+  } catch {
+    return { ok: false, error: "Failed to prepare movie" };
   }
 }
