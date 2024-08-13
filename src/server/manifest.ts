@@ -19,6 +19,10 @@ export default class Manifest {
     }
   }
 
+  static allKeys(): string[] {
+    return Object.keys(this.get());
+  }
+
   static get(): ManifestData {
     return JSON.parse(fsSync.readFileSync(this.path, "utf-8"));
   }

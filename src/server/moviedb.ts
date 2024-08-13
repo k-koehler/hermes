@@ -1,4 +1,5 @@
 import { Movie, TvShow } from "@/defs";
+import Manifest from "./manifest";
 
 const options = {
   method: "GET",
@@ -33,4 +34,9 @@ export async function getTrendingMovies(): Promise<Movie[]> {
 export async function getTrendingTvShows(): Promise<TvShow[]> {
   const url = `https://api.themoviedb.org/3/trending/tv/day?language=en-US&page=1`;
   return (await (await fetch(url, options)).json()).results;
+}
+
+export async function getDownloadedMovies(): Promise<Movie[]> {
+  const ids = Manifest.allKeys();
+  return Promise.all(ids.map((id) => getMovie(id)));
 }
