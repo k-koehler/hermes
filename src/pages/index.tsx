@@ -1,14 +1,11 @@
 import MediaCard from "@/components/media-card";
 import MediaContainer from "@/components/media-container";
 import Page from "@/components/page";
-import {
-  getDownloadedMovies,
-  getTrendingMovies,
-  getTrendingTvShows,
-} from "@/server/moviedb";
-import { Movie, TvShow, movieToMedia, tvShowToMedia } from "@/defs";
-import { TextField, Typography } from "@mui/material";
+import { getDownloadedMovies, getTrendingMovies } from "@/server/moviedb";
+import { Movie, maxServerStorageBytes, movieToMedia } from "@/defs";
+import { Chip, TextField, Typography } from "@mui/material";
 import { getServerStorageUsed } from "@/server/downloads";
+import bytes from "bytes";
 
 interface Props {
   trendingMovies: Movie[];
@@ -24,11 +21,16 @@ export async function getServerSideProps() {
     props: {
       trendingMovies,
       downloadedMovies,
+      bytesUsed,
     },
   };
 }
 
-export default function Index({ trendingMovies, downloadedMovies }: Props) {
+export default function Index({
+  trendingMovies,
+  downloadedMovies,
+  bytesUsed,
+}: Props) {
   return (
     <Page
       style={{
@@ -45,6 +47,19 @@ export default function Index({ trendingMovies, downloadedMovies }: Props) {
         <TextField label="Search" variant="outlined" name="q" fullWidth />
       </form>
       <Typography variant="h4">System Information</Typography>
+      <MediaContainer>
+        <Chip
+          label={`Storage Used: ${bytes(bytesUsed)}`}
+          color="primary"
+          variant="outlined"
+        />
+        <Chip
+          label={`Available: ${bytes(maxServerStorageBytes - bytesUsed)}`}
+          color="primary"
+          variant="outlined"
+        />
+      </MediaContainer>
+
       <Typography variant="h4">Downloaded Movies</Typography>
       <MediaContainer>
         {downloadedMovies.map((movie) => (

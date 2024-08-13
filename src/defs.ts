@@ -1,3 +1,6 @@
+export const maxServerStorageGb = 400; // 250 GB
+export const maxServerStorageBytes = maxServerStorageGb * 1024 ** 3;
+
 export interface Movie {
   adult: boolean;
   backdrop_path: string;

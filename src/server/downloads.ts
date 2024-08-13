@@ -162,11 +162,21 @@ export async function convertMovie(movieId: number) {
   });
 }
 
-export const maxServerStorageGb = 250; // 250 GB
-export const maxServerStorageBytes = maxServerStorageGb * 1024 ** 3;
-
 export async function getServerStorageUsed() {
   const downloadPath = join(process.cwd(), "downloads");
-  const stats = await fs.stat(downloadPath);
-  return stats.size;
+  async function getDirSize(dirPath: string): Promise<number> {
+    let size = 0;
+    const dirFiles = await fs.readdir(dirPath);
+    for (const file of dirFiles) {
+      const fullPath = join(dirPath, file);
+      const stats = await fs.stat(fullPath);
+      if (stats.isDirectory()) {
+        size += await getDirSize(fullPath);
+      } else {
+        size += stats.size;
+      }
+    }
+    return size;
+  }
+  return getDirSize(downloadPath);
 }
